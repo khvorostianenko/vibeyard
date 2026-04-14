@@ -102,11 +102,17 @@
   flex: 1;
   min-height: 0;
   overflow: hidden;
+  background: var(--terminal-bg);
 }
 
 .terminal-pane .xterm {
   height: 100%;
   padding: 4px;
+  background: var(--terminal-bg);
+}
+
+.xterm .xterm-viewport {
+  background-color: var(--terminal-bg) !important;
 }
 
 .terminal-pane.hidden {
@@ -263,11 +269,13 @@
   min-height: 0;
   overflow: hidden;
   position: relative;
+  background: var(--terminal-bg);
 }
 
 #project-terminal-container .xterm {
   height: 100%;
   padding: 4px;
+  background: var(--terminal-bg);
 }
 
 #project-terminal-sidebar {
