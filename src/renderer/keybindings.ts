@@ -1,12 +1,13 @@
 import { appState } from './state.js';
 import { promptNewProject, toggleSidebar } from './components/sidebar.js';
 import { quickNewSession } from './components/tab-bar.js';
-import { toggleProjectTerminal } from './components/project-terminal.js';
+import { toggleProjectTerminal, getAllShellInstances } from './components/project-terminal.js';
 import { toggleDebugPanel } from './components/debug-panel.js';
 import { showHelpDialog } from './components/help-dialog.js';
-import { getFocusedSessionId } from './components/terminal-pane.js';
+import { getFocusedSessionId, getAllInstances } from './components/terminal-pane.js';
 import { showSearchBar, TerminalSearchBackend, ShellTerminalSearchBackend } from './components/search-bar.js';
 import { getActiveShellSessionId } from './components/project-terminal.js';
+import { getAllRemoteInstances } from './components/remote-terminal-pane.js';
 import { toggleGitPanel } from './components/git-panel.js';
 import { showQuickOpen } from './components/quick-open.js';
 import { shortcutManager } from './shortcuts.js';
@@ -15,6 +16,7 @@ import { getFileViewerInstance } from './components/file-viewer.js';
 import { DomSearchBackend } from './components/dom-search-backend.js';
 import { toggleInspector } from './components/session-inspector.js';
 import { showUsageModal } from './components/usage-modal.js';
+import { cycleTheme } from './theme-manager.js';
 
 export function initKeybindings(): void {
   const handleCloseSession = () => {
@@ -96,6 +98,31 @@ export function initKeybindings(): void {
   shortcutManager.registerHandler('close-session', handleCloseSession);
   shortcutManager.registerHandler('usage-stats', showUsageModal);
   shortcutManager.registerHandler('toggle-inspector', toggleInspector);
+  shortcutManager.registerHandler('toggle-theme', cycleTheme);
+
+  const DEFAULT_FONT_SIZE = 16;
+  const MIN_FONT_SIZE = 8;
+  const MAX_FONT_SIZE = 36;
+
+  const adjustAllTerminalsFontSize = (delta: number) => {
+    const adjust = (terminal: { options: { fontSize?: number } }, fitAddon: { fit: () => void }) => {
+      const current = terminal.options.fontSize ?? DEFAULT_FONT_SIZE;
+      terminal.options.fontSize = Math.max(MIN_FONT_SIZE, Math.min(MAX_FONT_SIZE, current + delta));
+      fitAddon.fit();
+    };
+
+    for (const inst of getAllInstances().values()) adjust(inst.terminal, inst.fitAddon);
+    for (const inst of getAllShellInstances()) adjust(inst.terminal, inst.fitAddon);
+    for (const inst of getAllRemoteInstances().values()) adjust(inst.terminal, inst.fitAddon);
+  };
+
+  shortcutManager.registerHandler('increase-font-size', () => adjustAllTerminalsFontSize(2));
+  shortcutManager.registerHandler('decrease-font-size', () => adjustAllTerminalsFontSize(-2));
+  shortcutManager.registerHandler('reset-font-size', () => {
+    for (const inst of getAllInstances().values()) { inst.terminal.options.fontSize = DEFAULT_FONT_SIZE; inst.fitAddon.fit(); }
+    for (const inst of getAllShellInstances()) { inst.terminal.options.fontSize = DEFAULT_FONT_SIZE; inst.fitAddon.fit(); }
+    for (const inst of getAllRemoteInstances().values()) { inst.terminal.options.fontSize = DEFAULT_FONT_SIZE; inst.fitAddon.fit(); }
+  });
 
   document.addEventListener('keydown', (e) => {
     shortcutManager.matchEvent(e);

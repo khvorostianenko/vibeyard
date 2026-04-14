@@ -5,6 +5,7 @@ import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { WebglAddon } from '@xterm/addon-webgl';
 import type { ShareMode } from '../../shared/sharing-types.js';
+import { getTerminalTheme } from '../theme-manager.js';
 
 interface RemoteTerminalInstance {
   terminal: Terminal;
@@ -55,21 +56,8 @@ export function createRemoteTerminalPane(
   element.appendChild(statusBar);
 
   const terminal = new Terminal({
-    theme: {
-      background: '#000000',
-      foreground: '#e0e0e0',
-      cursor: '#e94560',
-      selectionBackground: '#ff6b85a6',
-      black: '#000000',
-      red: '#e94560',
-      green: '#0f9b58',
-      yellow: '#f4b400',
-      blue: '#4285f4',
-      magenta: '#ab47bc',
-      cyan: '#00acc1',
-      white: '#e0e0e0',
-    },
-    fontSize: 14,
+    theme: getTerminalTheme(),
+    fontSize: 16,
     fontFamily: "'JetBrains Mono', 'Fira Code', 'SF Mono', Menlo, monospace",
     cursorBlink: mode === 'readwrite',
     allowProposedApi: true,
@@ -102,6 +90,10 @@ export function createRemoteTerminalPane(
 
 export function getRemoteTerminalInstance(sessionId: string): RemoteTerminalInstance | undefined {
   return instances.get(sessionId);
+}
+
+export function getAllRemoteInstances(): Map<string, RemoteTerminalInstance> {
+  return instances;
 }
 
 export function attachRemoteToContainer(sessionId: string, container: HTMLElement): void {

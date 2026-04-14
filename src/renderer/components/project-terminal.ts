@@ -6,6 +6,7 @@ import { appState } from '../state.js';
 import { fitAllVisible } from './terminal-pane.js';
 import { destroySearchBar, hideSearchBar } from './search-bar.js';
 import { shortcutManager, displayKeys } from '../shortcuts.js';
+import { getTerminalTheme } from '../theme-manager.js';
 import { attachClipboardCopyHandler } from './terminal-utils.js';
 import { esc } from '../dom-utils.js';
 
@@ -68,21 +69,8 @@ function createShell(projectId: string): ShellTerminalInstance {
   element.style.position = 'relative';
 
   const terminal = new Terminal({
-    theme: {
-      background: '#000000',
-      foreground: '#e0e0e0',
-      cursor: '#e94560',
-      selectionBackground: '#ff6b85a6',
-      black: '#000000',
-      red: '#e94560',
-      green: '#0f9b58',
-      yellow: '#f4b400',
-      blue: '#4285f4',
-      magenta: '#ab47bc',
-      cyan: '#00acc1',
-      white: '#e0e0e0',
-    },
-    fontSize: 14,
+    theme: getTerminalTheme(),
+    fontSize: 16,
     fontFamily: "'JetBrains Mono', 'Fira Code', 'SF Mono', Menlo, monospace",
     cursorBlink: true,
     allowProposedApi: true,
@@ -477,6 +465,14 @@ export function getActiveShellSessionId(): string | null {
   if (!currentProjectId || panelEl.classList.contains('hidden')) return null;
   const instance = getActiveShell(currentProjectId);
   return instance?.sessionId ?? null;
+}
+
+export function getAllShellInstances(): ShellTerminalInstance[] {
+  const all: ShellTerminalInstance[] = [];
+  for (const list of shells.values()) {
+    all.push(...list);
+  }
+  return all;
 }
 
 export { isShellSessionId };

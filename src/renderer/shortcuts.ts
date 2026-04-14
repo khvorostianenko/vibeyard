@@ -46,6 +46,10 @@ export const SHORTCUT_DEFAULTS: ShortcutDefault[] = [
   { id: 'close-session', label: 'Close Session', category: 'Sessions', defaultKeys: 'CmdOrCtrl+W' },
   { id: 'usage-stats', label: 'Usage Stats', category: 'Panels', defaultKeys: 'CmdOrCtrl+Shift+U' },
   { id: 'toggle-inspector', label: 'Toggle Session Inspector', category: 'Panels', defaultKeys: 'CmdOrCtrl+Shift+I' },
+  { id: 'increase-font-size', label: 'Increase Font Size', category: 'View', defaultKeys: 'CmdOrCtrl+=' },
+  { id: 'decrease-font-size', label: 'Decrease Font Size', category: 'View', defaultKeys: 'CmdOrCtrl+-' },
+  { id: 'reset-font-size', label: 'Reset Font Size', category: 'View', defaultKeys: 'CmdOrCtrl+0' },
+  { id: 'toggle-theme', label: 'Toggle Theme', category: 'View', defaultKeys: 'CmdOrCtrl+Shift+T' },
 ];
 
 /** Convert accelerator string to platform-specific display string */
