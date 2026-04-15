@@ -37,6 +37,7 @@ import type { InspectorEvent } from '../shared/types.js';
 import { getContext } from './session-context.js';
 import { initSessionInspector } from './components/session-inspector.js';
 import { loadProviderMetas } from './provider-availability.js';
+import { initTheme } from './theme-manager.js';
 
 let isQuitting = false;
 window.vibeyard.app.onQuitting(() => {
@@ -148,6 +149,7 @@ async function main(): Promise<void> {
   await loadProviderMetas();
 
   // Initialize components
+  initTheme();
   initSessionUnread();
   initSidebar();
   initTabBar();
