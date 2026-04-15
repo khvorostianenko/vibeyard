@@ -780,7 +780,20 @@ function showAddSessionContextMenu(x: number, y: number): void {
     if (project) appState.addBrowserTabSession(project.id);
   });
 
+  const dangerousItem = document.createElement('div');
+  dangerousItem.className = 'tab-context-menu-item';
+  dangerousItem.textContent = 'New Dangerously SP Session';
+  dangerousItem.addEventListener('click', (e) => {
+    e.stopPropagation();
+    hideTabContextMenu();
+    const project = appState.activeProject;
+    if (!project) return;
+    const sessionNum = project.sessions.length + 1;
+    appState.addSession(project.id, `Session ${sessionNum}`, '--dangerously-skip-permissions');
+  });
+
   menu.appendChild(quickItem);
+  menu.appendChild(dangerousItem);
   menu.appendChild(customItem);
   menu.appendChild(browserItem);
   menu.appendChild(joinSeparator);
