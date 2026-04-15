@@ -143,6 +143,8 @@ export interface ProjectRecord {
   readiness?: ReadinessResult;
 }
 
+export type ThemeMode = 'dark' | 'light' | 'phpstorm-dark' | 'solarized-light' | 'quiet-light' | 'system';
+
 export interface Preferences {
   soundOnSessionWaiting: boolean;
   notificationsDesktop: boolean;
@@ -150,6 +152,7 @@ export interface Preferences {
   sessionHistoryEnabled: boolean;
   insightsEnabled: boolean;
   autoTitleEnabled: boolean;
+  theme?: ThemeMode;
   defaultProvider?: ProviderId;
   statusLineConsent?: 'granted' | 'declined' | null;
   keybindings?: Record<string, string>;

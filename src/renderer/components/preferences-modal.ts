@@ -3,7 +3,7 @@ import { closeModal } from './modal.js';
 import { createCustomSelect, type CustomSelectInstance } from './custom-select.js';
 import { shortcutManager, displayKeys, eventToAccelerator } from '../shortcuts.js';
 import { loadProviderAvailability, getProviderAvailabilitySnapshot } from '../provider-availability.js';
-import type { CliProviderMeta, ProviderId, SettingsValidationResult } from '../../shared/types.js';
+import type { CliProviderMeta, ProviderId, SettingsValidationResult, ThemeMode } from '../../shared/types.js';
 import { hasProviderIssue, type ProviderStatus } from './setup-checks.js';
 
 
@@ -62,6 +62,7 @@ export function showPreferencesModal(): void {
   let historyCheckbox: HTMLInputElement | null = null;
   let insightsCheckbox: HTMLInputElement | null = null;
   let autoTitleCheckbox: HTMLInputElement | null = null;
+  let themeSelect: CustomSelectInstance | null = null;
   let defaultProviderSelect: CustomSelectInstance | null = null;
   let debugModeCheckbox: HTMLInputElement | null = null;
   let sidebarCheckboxes: { configSections: HTMLInputElement; gitPanel: HTMLInputElement; sessionHistory: HTMLInputElement; costFooter: HTMLInputElement; readinessSection: HTMLInputElement } | null = null;
@@ -85,6 +86,27 @@ export function showPreferencesModal(): void {
     }
 
     if (section === 'general') {
+      // Theme selector
+      const themeRow = document.createElement('div');
+      themeRow.className = 'modal-toggle-field';
+
+      const themeLabel = document.createElement('label');
+      themeLabel.textContent = 'Theme';
+
+      const currentTheme = appState.preferences.theme ?? 'dark';
+      themeSelect = createCustomSelect('pref-theme', [
+        { value: 'dark', label: 'Dark' },
+        { value: 'light', label: 'Light' },
+        { value: 'phpstorm-dark', label: 'PhpStorm Dark' },
+        { value: 'solarized-light', label: 'Solarized Light' },
+        { value: 'quiet-light', label: 'Quiet Light' },
+        { value: 'system', label: 'System' },
+      ], currentTheme);
+
+      themeRow.appendChild(themeLabel);
+      themeRow.appendChild(themeSelect.element);
+      content.appendChild(themeRow);
+
       // Default provider dropdown
       const providerRow = document.createElement('div');
       providerRow.className = 'modal-toggle-field';
@@ -655,6 +677,9 @@ export function showPreferencesModal(): void {
   }
 
   const save = () => {
+    if (themeSelect) {
+      appState.setPreference('theme', themeSelect.getValue() as ThemeMode);
+    }
     if (soundCheckbox) {
       appState.setPreference('soundOnSessionWaiting', soundCheckbox.checked);
     }
@@ -721,6 +746,7 @@ export function showPreferencesModal(): void {
 
   (overlay as any)._cleanup = () => {
     cleanupRecorder();
+    if (themeSelect) themeSelect.destroy();
     if (defaultProviderSelect) defaultProviderSelect.destroy();
     btnConfirm.removeEventListener('click', handleConfirm);
     btnCancel.removeEventListener('click', handleCancel);
