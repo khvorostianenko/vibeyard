@@ -15,6 +15,7 @@ export function initSettingsGuard(): void {
   });
 
   window.vibeyard.settings.onWarning((data: SettingsWarningData) => {
+    return; // Settings guard banner disabled
     const hasStatusLineIssue = data.statusLine !== 'vibeyard';
     const hasHooksIssue = data.hooks !== 'complete';
 

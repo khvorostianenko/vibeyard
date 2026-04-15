@@ -127,6 +127,7 @@ export function initTheme(): void {
   applyTheme();
 
   appState.on('preferences-changed', () => applyTheme());
+  appState.on('state-loaded', () => applyTheme());
 
   systemDarkQuery = window.matchMedia('(prefers-color-scheme: dark)');
   systemDarkQuery.addEventListener('change', () => {
