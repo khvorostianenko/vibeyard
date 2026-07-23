@@ -1,9 +1,21 @@
 // Shared type definitions used across main, preload, and renderer processes.
 
+import type { TeamDomain } from './team-config.js';
+
+export const ZOOM_MIN = 0.75;
+export const ZOOM_MAX = 2.0;
+
 // --- Provider ---
 
 export type ProviderId = 'claude' | 'codex' | 'copilot' | 'gemini';
 export type PendingPromptTrigger = 'session-start' | 'first-output' | 'startup-arg';
+
+/**
+ * UI language tag. Defined here (rather than imported from `renderer/i18n.ts`)
+ * because `shared/` is the lowest common denominator between main and
+ * renderer; the renderer is the source of truth for the actual catalog.
+ */
+export type Locale = 'en' | 'zh-CN';
 
 export interface CliProviderCapabilities {
   sessionResume: boolean;
@@ -14,6 +26,7 @@ export interface CliProviderCapabilities {
   shiftEnterNewline: boolean;
   pendingPromptTrigger: PendingPromptTrigger;
   planModeArg?: string;
+  systemPromptInjection: boolean;
 }
 
 export interface CliProviderMeta {
@@ -69,15 +82,25 @@ export interface ContextWindowInfo {
 
 // --- Session / State ---
 
+export type SessionType =
+  | 'mcp-inspector'
+  | 'diff-viewer'
+  | 'file-reader'
+  | 'remote-terminal'
+  | 'browser-tab'
+  | 'project-tab'
+  | 'kanban'
+  | 'team';
+
 export interface SessionRecord {
   id: string;
   name: string;
-  type?: 'claude' | 'mcp-inspector' | 'diff-viewer' | 'file-reader' | 'remote-terminal' | 'browser-tab';
+  type?: SessionType;
   providerId?: ProviderId;
   args?: string;
+  /** Custom environment variables (raw `KEY=VALUE` lines) injected into the PTY on spawn. */
+  envVars?: string;
   cliSessionId: string | null;
-  /** @deprecated Use cliSessionId instead. Kept for state migration compatibility. */
-  claudeSessionId?: string | null;
   mcpServerUrl?: string;
   diffFilePath?: string;
   diffArea?: string;
@@ -91,8 +114,59 @@ export interface SessionRecord {
   remoteHostName?: string;
   shareMode?: 'readonly' | 'readwrite';
   browserTabUrl?: string;
+  /** When true, the browser-tab webview uses an isolated partition that doesn't see imported cookies/passwords. */
+  browserIsolated?: boolean;
+  /** Persisted: identifies which TeamMember spawned this session, if any. */
+  teamMemberId?: string;
+  /** Persisted, sticky: which Profile backs this session's CLI config dir. Resume must reuse it. */
+  profileId?: string;
   /** Transient: initial prompt to inject on first spawn. Not persisted. */
   pendingInitialPrompt?: string;
+  /** Transient: system prompt to attach on first spawn. Not persisted (resume must not re-inject). */
+  pendingSystemPrompt?: string;
+}
+
+// --- Team ---
+
+export interface TeamMember {
+  id: string;
+  name: string;
+  role: string;
+  description?: string;
+  domain?: TeamDomain;
+  systemPrompt: string;
+  source: 'predefined' | 'custom';
+  sourceUrl?: string;
+  createdAt: number;
+  updatedAt: number;
+  /** When true, member is mirrored as a CLI-provider agent file at ~/.<cli>/agents/<slug>.md. */
+  installAsAgent?: boolean;
+  /** Sticky slug assigned on first install; preserved across renames so the right file is removed. */
+  agentSlug?: string;
+}
+
+export interface TeamData {
+  members: TeamMember[];
+  predefinedCache?: { fetchedAt: number; suggestions: TeamMember[] };
+}
+
+// --- CLI Provider Profiles ---
+
+/**
+ * A named CLI-provider profile backed by a separate config directory, injected
+ * via the provider's config-dir env var (e.g. CLAUDE_CONFIG_DIR). Lets a user
+ * isolate multiple licenses/logins (work vs personal). Currently only the
+ * 'claude' provider injects it; the interface stays uniform for future providers.
+ */
+export interface Profile {
+  id: string;
+  name: string;
+  providerId: ProviderId;
+  /** Absolute, resolved config dir (managed under ~/.vibeyard/profiles/<id> or a custom path). */
+  configDir: string;
+  /** True when configDir is the auto-managed path; false when the user supplied a custom path. */
+  managed: boolean;
+  createdAt: number;
 }
 
 export interface ArchivedSession {
@@ -103,6 +177,9 @@ export interface ArchivedSession {
   createdAt: string;
   closedAt: string;
   bookmarked?: boolean;
+  teamMemberId?: string;
+  /** Preserved so a resumed session reuses the same profile config dir (CLAUDE_CONFIG_DIR). */
+  profileId?: string;
   cost: {
     totalCostUsd: number;
     totalInputTokens: number;
@@ -119,9 +196,64 @@ export interface InitialContextSnapshot {
   usedPercentage: number;
 }
 
+export interface DeepSearchResult {
+  providerId: ProviderId;
+  cliSessionId: string;
+  projectSlug: string;
+  projectCwd: string;
+  snippet: string;
+  score: number;
+  /** Title derived from the first user message — fallback when Vibeyard has no name for this session. */
+  derivedName?: string;
+  /** Profile whose config dir holds this transcript, so resume reopens under the right CLAUDE_CONFIG_DIR. */
+  profileId?: string;
+}
+
 export interface ProjectInsightsData {
   initialContextSnapshots: InitialContextSnapshot[];
   dismissed: string[];
+}
+
+// --- Board ---
+
+export type ColumnBehavior = 'inbox' | 'active' | 'terminal' | 'none';
+
+export interface BoardColumn {
+  id: string;
+  title: string;
+  order: number;
+  behavior: ColumnBehavior;
+  color?: string;
+  locked?: boolean;
+}
+
+export interface BoardTask {
+  id: string;
+  title: string;
+  prompt: string;
+  notes?: string;
+  columnId: string;
+  order: number;
+  sessionId?: string;
+  cliSessionId?: string;
+  providerId?: ProviderId;
+  /** Profile (CLI config dir) to run this task under; falls back to project/global default when unset. */
+  profileId?: string;
+  planMode?: boolean;
+  tags?: string[];
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface TagDefinition {
+  name: string;
+  color: string;
+}
+
+export interface BoardData {
+  columns: BoardColumn[];
+  tasks: BoardTask[];
+  tags?: TagDefinition[];
 }
 
 export interface ProjectRecord {
@@ -135,12 +267,79 @@ export interface ProjectRecord {
     splitPanes: string[];
     splitDirection: 'horizontal' | 'vertical';
   };
+  board?: BoardData;
   sessionHistory?: ArchivedSession[];
   insights?: ProjectInsightsData;
   defaultArgs?: string;
+  /** Default profile applied to new sessions in this project (overridden per-session). */
+  defaultProfileId?: string;
+  defaultEnv?: string;
   terminalPanelOpen?: boolean;
   terminalPanelHeight?: number;
   readiness?: ReadinessResult;
+  readinessHistory?: ReadinessSnapshot[];
+  overviewLayout?: OverviewLayout;
+  githubLastSeen?: Record<string, string>;
+}
+
+// --- Overview Widgets ---
+
+export type OverviewWidgetType =
+  | 'readiness'
+  | 'provider-tools'
+  | 'github-prs'
+  | 'github-issues'
+  | 'team'
+  | 'kanban'
+  | 'sessions'
+  | 'favorite-sessions'
+  | 'usage-stats'
+  | 'top-files-by-tokens';
+
+export interface OverviewWidget {
+  id: string;
+  type: OverviewWidgetType;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  config?: Record<string, unknown>;
+}
+
+export interface OverviewLayout {
+  gridVersion: 1;
+  widgets: OverviewWidget[];
+}
+
+// --- GitHub ---
+
+export interface GithubItem {
+  number: number;
+  title: string;
+  state: 'open' | 'closed';
+  user: { login: string; avatar_url: string } | null;
+  html_url: string;
+  created_at: string;
+  updated_at: string;
+  closed_at: string | null;
+  /** Present on issues that are PRs (Issues API includes PRs); absent on real issues. */
+  pull_request?: { url: string };
+  /** Optional PR-only fields populated when fetching from /pulls. */
+  draft?: boolean;
+  merged_at?: string | null;
+  comments?: number;
+  labels?: { name: string; color: string }[];
+}
+
+export interface GithubFetchResult {
+  ok: boolean;
+  items?: GithubItem[];
+  error?: string;
+}
+
+export interface GithubRepo {
+  owner: string;
+  repo: string;
 }
 
 export type ThemeMode = 'dark' | 'light' | 'phpstorm-dark' | 'solarized-light' | 'quiet-light' | 'system';
@@ -153,18 +352,78 @@ export interface Preferences {
   insightsEnabled: boolean;
   autoTitleEnabled: boolean;
   theme?: ThemeMode;
+  confirmCloseWorkingSession: boolean;
+  zoomFactor?: number;
   defaultProvider?: ProviderId;
+  /** UI language tag. See `Locale` for the supported set. */
+  locale?: Locale;
+  /** Global fallback profile applied when neither the session nor the project specifies one. */
+  defaultProfileId?: string;
   statusLineConsent?: 'granted' | 'declined' | null;
+  // The foreign statusLine command the user was asked about when they made
+  // the consent decision. Used to detect new conflicts (different command)
+  // vs the previously-acknowledged one.
+  statusLineConsentCommand?: string | null;
+  copyOnSelect?: boolean;
   keybindings?: Record<string, string>;
   readinessExcludedProviders?: ProviderId[];
   sidebarViews?: {
-    configSections: boolean;
     gitPanel: boolean;
     sessionHistory: boolean;
-    costFooter: boolean;
-    readinessSection: boolean;
+    discussions: boolean;
+    fileTree: boolean;
+    /** Show the global cross-project "Active Sessions" section in the sidebar. */
+    activeSessions: boolean;
   };
+  /**
+   * Which live session statuses count as "active" for the global Active Sessions
+   * sidebar section. Absent ⇒ the default set (working, input, completed).
+   */
+  activeSessionStatuses?: {
+    working: boolean;
+    waiting: boolean;
+    input: boolean;
+    completed: boolean;
+  };
+  boardCardMetrics?: boolean;
+  chromeImport?: ChromeImportSummary;
 }
+
+// --- Chrome Import ---
+
+export interface ChromeProfile {
+  id: string;
+  displayName: string;
+}
+
+export interface ChromeImportSummary {
+  lastImportedAt: number;
+  profileId: string;
+  cookieCount: number;
+  skippedV11: number;
+}
+
+export interface ChromeImportProgress {
+  stage: 'starting' | 'copy' | 'cookies' | 'done' | 'error';
+  done?: number;
+  total?: number;
+  skippedV11?: number;
+  errors?: number;
+  message?: string;
+}
+
+export interface ChromeImportOptions {
+  profileId: string;
+}
+
+export interface ChromeImportResult {
+  ok: boolean;
+  cookieCount: number;
+  skippedV11: number;
+  errors: string[];
+}
+
+export const BROWSER_DEFAULT_PARTITION = 'persist:vibeyard-browser';
 
 // --- Settings Validation ---
 
@@ -196,11 +455,16 @@ export interface PersistedState {
   appLaunchCount?: number;
   starPromptDismissed?: boolean;
   discussionsLastSeen?: string;
+  team?: TeamData;
+  /** Global, provider-scoped CLI profiles (e.g. Claude work/personal config dirs). */
+  profiles?: Profile[];
 }
 
 // --- AI Readiness ---
 
 export type ReadinessCheckStatus = 'pass' | 'fail' | 'warning';
+
+export type ReadinessEffort = 'low' | 'medium' | 'high';
 
 export interface ReadinessCheck {
   id: string;
@@ -211,6 +475,9 @@ export interface ReadinessCheck {
   maxScore: number;
   fixPrompt?: string;
   providerIds?: ProviderId[];
+  effort?: ReadinessEffort;
+  impact?: number;
+  rationale?: string;
 }
 
 export interface ReadinessCategory {
@@ -225,6 +492,12 @@ export interface ReadinessResult {
   overallScore: number;
   categories: ReadinessCategory[];
   scannedAt: string;
+}
+
+export interface ReadinessSnapshot {
+  timestamp: string;
+  overallScore: number;
+  categoryScores: Record<string, number>;
 }
 
 // --- Cost / Context ---
@@ -349,3 +622,34 @@ export interface StatsCache {
   firstSessionDate: string;
   hourCounts: Record<string, number>;
 }
+
+// --- Filesystem IPC ---
+
+/** A single filesystem change emitted by the directory watcher (chokidar-backed). */
+export type FsChangeType = 'add' | 'addDir' | 'change' | 'unlink' | 'unlinkDir';
+
+export interface FsChange {
+  /** Absolute path of the entry that changed. */
+  path: string;
+  /** Absolute path of the parent directory (the watched dir the change belongs to). */
+  dir: string;
+  type: FsChangeType;
+}
+
+export type ReadFileResult =
+  | { ok: true; content: string }
+  | { ok: false; reason: 'binary' | 'error' };
+
+export type FileStatResult =
+  | { ok: true; size: number; mtimeMs: number }
+  | { ok: false };
+
+export interface TopFile {
+  path: string;
+  tokens: number;
+  size: number;
+}
+
+export type TopFilesResult =
+  | { ok: true; files: TopFile[]; scanned: number; skipped: number }
+  | { ok: false };

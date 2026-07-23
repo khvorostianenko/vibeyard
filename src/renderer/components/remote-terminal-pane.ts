@@ -2,10 +2,11 @@
 // receiving data from a WebRTC data channel (P2P session sharing).
 
 import { Terminal } from '@xterm/xterm';
+import { getTerminalTheme } from '../terminal-theme.js';
 import { FitAddon } from '@xterm/addon-fit';
-import { WebglAddon } from '@xterm/addon-webgl';
 import type { ShareMode } from '../../shared/sharing-types.js';
-import { getTerminalTheme } from '../theme-manager.js';
+import { resolveTheme } from '../theme-manager.js';
+import { attachCopyOnSelect, loadWebglWithFallback } from './terminal-utils.js';
 
 interface RemoteTerminalInstance {
   terminal: Terminal;
@@ -56,7 +57,7 @@ export function createRemoteTerminalPane(
   element.appendChild(statusBar);
 
   const terminal = new Terminal({
-    theme: getTerminalTheme(),
+    theme: getTerminalTheme(resolveTheme()),
     fontSize: 16,
     fontFamily: "'JetBrains Mono', 'Fira Code', 'SF Mono', Menlo, monospace",
     cursorBlink: mode === 'readwrite',
@@ -104,13 +105,9 @@ export function attachRemoteToContainer(sessionId: string, container: HTMLElemen
   if (!xtermWrap.querySelector('.xterm')) {
     container.appendChild(instance.element);
     instance.terminal.open(xtermWrap as HTMLElement);
+    attachCopyOnSelect(instance.terminal);
 
-    try {
-      const webglAddon = new WebglAddon();
-      instance.terminal.loadAddon(webglAddon);
-    } catch {
-      // Software renderer fallback
-    }
+    loadWebglWithFallback(instance.terminal);
   } else {
     container.appendChild(instance.element);
   }
@@ -173,6 +170,13 @@ export function showRemoteEndOverlay(sessionId: string): void {
     </div>
   `;
   instance.element.appendChild(overlay);
+}
+
+export function applyThemeToAllRemoteTerminals(theme: string): void {
+  const termTheme = getTerminalTheme(theme);
+  for (const instance of instances.values()) {
+    instance.terminal.options.theme = termTheme;
+  }
 }
 
 export function destroyRemoteTerminal(sessionId: string): void {

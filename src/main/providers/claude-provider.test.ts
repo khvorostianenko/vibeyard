@@ -65,6 +65,7 @@ describe('meta', () => {
     expect(caps.shiftEnterNewline).toBe(true);
     expect(caps.pendingPromptTrigger).toBe('startup-arg');
     expect(caps.planModeArg).toBe('--permission-mode plan');
+    expect(caps.systemPromptInjection).toBe(true);
   });
 
   it('has defaultContextWindowSize of 200,000', () => {
@@ -149,6 +150,16 @@ describe('buildEnv', () => {
     expect(env.CLAUDE_CODE).toBeUndefined();
     expect(env.OTHER).toBe('val');
   });
+
+  it('sets CLAUDE_CONFIG_DIR when a profile configDir is given', () => {
+    const env = provider.buildEnv('sess-123', {}, { configDir: '/mock/home/.vibeyard/profiles/work' });
+    expect(env.CLAUDE_CONFIG_DIR).toBe('/mock/home/.vibeyard/profiles/work');
+  });
+
+  it('does not set CLAUDE_CONFIG_DIR when no configDir is given', () => {
+    expect(provider.buildEnv('sess-123', {}).CLAUDE_CONFIG_DIR).toBeUndefined();
+    expect(provider.buildEnv('sess-123', {}, {}).CLAUDE_CONFIG_DIR).toBeUndefined();
+  });
 });
 
 describe('buildArgs', () => {
@@ -186,6 +197,28 @@ describe('buildArgs', () => {
     const args = provider.buildArgs({ cliSessionId: 'sid-1', isResume: false, extraArgs: '', initialPrompt: 'fix the linter' });
     expect(args).toEqual(['--session-id', 'sid-1', 'fix the linter']);
   });
+
+  it('passes systemPrompt as --append-system-prompt argv pair', () => {
+    const args = provider.buildArgs({ cliSessionId: null, isResume: false, extraArgs: '', systemPrompt: 'You are the CMO.' });
+    expect(args).toEqual(['--append-system-prompt', 'You are the CMO.']);
+  });
+
+  it('preserves multi-line systemPrompt as a single argv element', () => {
+    const prompt = 'You are the CMO.\n\nFocus on:\n- growth\n- retention';
+    const args = provider.buildArgs({ cliSessionId: null, isResume: false, extraArgs: '', systemPrompt: prompt });
+    expect(args).toEqual(['--append-system-prompt', prompt]);
+  });
+
+  it('puts systemPrompt before initialPrompt and extra args', () => {
+    const args = provider.buildArgs({
+      cliSessionId: 'sid-1',
+      isResume: false,
+      extraArgs: '--verbose',
+      initialPrompt: 'hello',
+      systemPrompt: 'be concise',
+    });
+    expect(args).toEqual(['--session-id', 'sid-1', '--append-system-prompt', 'be concise', 'hello', '--verbose']);
+  });
 });
 
 describe('getShiftEnterSequence', () => {
@@ -212,6 +245,12 @@ describe('getTranscriptPath', () => {
     const out = provider.getTranscriptPath('sid', 'C:\\Users\\me\\proj');
     // ':' and '\' each collapse to '-', producing 'C--Users-me-proj'
     expect(out).toBe(path.join('/mock/home', '.claude', 'projects', 'C--Users-me-proj', 'sid.jsonl'));
+  });
+
+  it('resolves under a profile config dir when given', () => {
+    mockExistsSync.mockReturnValue(true);
+    const out = provider.getTranscriptPath('abc-123', '/tmp/proj', '/mock/home/.vibeyard/profiles/work');
+    expect(out).toBe(path.join('/mock/home/.vibeyard/profiles/work', 'projects', '-tmp-proj', 'abc-123.jsonl'));
   });
 });
 

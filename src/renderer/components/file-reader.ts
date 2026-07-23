@@ -1,8 +1,12 @@
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
 import { appState } from '../state.js';
+import { closeSessionIfFileMissing } from '../session-close.js';
 import { destroySearchBar } from './search-bar.js';
 import { escapeHtml } from './dom-search-backend.js';
+import { isAbsolutePath, dirname, samePath } from '../../shared/platform.js';
+import { estimateTokens, TOKEN_COUNT_MAX_CHARS } from '../../shared/token-estimate.js';
+import { pathToFileURL } from '../file-url.js';
 
 interface FileReaderInstance {
   element: HTMLElement;
@@ -12,6 +16,7 @@ interface FileReaderInstance {
   targetLine?: number;
   viewMode: 'raw' | 'rendered';
   kind: 'text' | 'image';
+  unsupported: boolean;
   rawContent?: string;
   imageDataUrl?: string;
 }
@@ -22,6 +27,10 @@ function isMarkdownFile(filePath: string): boolean {
 
 function isImageFile(filePath: string): boolean {
   return /\.(png|jpe?g|gif|webp|bmp|ico|svg)$/i.test(filePath);
+}
+
+function isHtmlFile(filePath: string): boolean {
+  return /\.(html?|xhtml)$/i.test(filePath);
 }
 
 const instances = new Map<string, FileReaderInstance>();
@@ -52,9 +61,9 @@ function renderFileContent(content: string): HTMLElement {
   return wrapper;
 }
 
-function renderMarkdownContent(content: string): HTMLElement {
+export function renderMarkdownContent(content: string): HTMLElement {
   const wrapper = document.createElement('div');
-  wrapper.className = 'file-reader-content file-reader-markdown';
+  wrapper.className = 'file-reader-markdown';
   const rawHtml = marked.parse(content, { async: false }) as string;
   wrapper.innerHTML = DOMPurify.sanitize(rawHtml);
   return wrapper;
@@ -93,7 +102,7 @@ function renderBody(instance: FileReaderInstance): void {
 
 function resolveFilePath(instance: FileReaderInstance): string {
   const project = appState.activeProject;
-  if (instance.filePath.startsWith('/')) return instance.filePath;
+  if (isAbsolutePath(instance.filePath)) return instance.filePath;
   return project ? `${project.path}/${instance.filePath}` : instance.filePath;
 }
 
@@ -101,17 +110,20 @@ function showFileReaderMessage(body: Element, message: string): void {
   body.innerHTML = `<div class="file-reader-content"><div class="file-reader-line"><span class="file-reader-line-text">${message}</span></div></div>`;
 }
 
-async function loadFile(instance: FileReaderInstance): Promise<void> {
+async function loadFile(instance: FileReaderInstance, sessionId: string): Promise<void> {
   if (instance.loaded) return;
 
   const project = appState.activeProject;
   if (!project) return;
 
+  instance.unsupported = false;
+  hideTokenBadge(instance);
   const body = instance.element.querySelector('.file-reader-body')!;
   showFileReaderMessage(body, 'Loading...');
 
   try {
     const fullPath = resolveFilePath(instance);
+    if (await closeSessionIfFileMissing(sessionId, fullPath)) return;
     if (instance.kind === 'image') {
       const result = await window.vibeyard.fs.readImage(fullPath);
       if (!result) {
@@ -123,8 +135,18 @@ async function loadFile(instance: FileReaderInstance): Promise<void> {
       instance.loaded = true;
       return;
     }
-    const content = await window.vibeyard.fs.readFile(fullPath);
-    instance.rawContent = content;
+    const result = await window.vibeyard.fs.readFile(fullPath);
+    if (!result.ok) {
+      showFileReaderMessage(
+        body,
+        result.reason === 'binary' ? 'Unable to preview this file' : 'Failed to load file',
+      );
+      instance.unsupported = true;
+      instance.loaded = true;
+      return;
+    }
+    instance.rawContent = result.content;
+    updateTokenBadge(instance, result.content);
     renderBody(instance);
     instance.loaded = true;
     if (instance.targetLine && instance.viewMode === 'raw') {
@@ -132,15 +154,41 @@ async function loadFile(instance: FileReaderInstance): Promise<void> {
     }
   } catch {
     showFileReaderMessage(body, 'Failed to load file');
+    instance.unsupported = true;
   }
+}
+
+function getTokenBadge(instance: FileReaderInstance): HTMLElement | null {
+  return instance.element.querySelector('.file-reader-token-badge');
+}
+
+function updateTokenBadge(instance: FileReaderInstance, content: string): void {
+  const badge = getTokenBadge(instance);
+  if (!badge) return;
+  if (content.length > TOKEN_COUNT_MAX_CHARS) {
+    badge.textContent = 'too large to count';
+  } else {
+    const count = estimateTokens(content);
+    badge.textContent = `~ ${count.toLocaleString()} tokens`;
+  }
+  badge.style.display = '';
+}
+
+function hideTokenBadge(instance: FileReaderInstance): void {
+  const badge = getTokenBadge(instance);
+  if (!badge) return;
+  badge.style.display = 'none';
 }
 
 function ensureFileChangedListener(): void {
   if (unwatchFileChanged) return;
-  unwatchFileChanged = window.vibeyard.fs.onFileChanged((changedPath: string) => {
-    for (const [sessionId, instance] of instances) {
-      if (instance.resolvedPath === changedPath && instance.loaded) {
-        reloadFileReader(sessionId);
+  unwatchFileChanged = window.vibeyard.fs.onFsChange((changes) => {
+    for (const change of changes) {
+      for (const [sessionId, instance] of instances) {
+        if (instance.resolvedPath && samePath(instance.resolvedPath, change.path) && instance.loaded) {
+          // reloadFileReader -> loadFile -> closeSessionIfFileMissing handles deletes.
+          reloadFileReader(sessionId);
+        }
       }
     }
   });
@@ -150,7 +198,7 @@ export function reloadFileReader(sessionId: string): void {
   const instance = instances.get(sessionId);
   if (!instance) return;
   instance.loaded = false;
-  loadFile(instance);
+  loadFile(instance, sessionId);
 }
 
 export function createFileReaderPane(sessionId: string, filePath: string, targetLine?: number): void {
@@ -158,6 +206,8 @@ export function createFileReaderPane(sessionId: string, filePath: string, target
 
   const el = document.createElement('div');
   el.className = 'file-reader-pane';
+  el.dataset.sessionId = sessionId;
+  el.dataset.paneKind = 'file-reader';
   el.style.display = 'none';
 
   // Header
@@ -172,8 +222,14 @@ export function createFileReaderPane(sessionId: string, filePath: string, target
   badge.className = 'file-reader-badge';
   badge.textContent = 'READ-ONLY';
 
+  const tokenBadge = document.createElement('span');
+  tokenBadge.className = 'file-reader-token-badge';
+  tokenBadge.style.display = 'none';
+  tokenBadge.title = 'Rough token estimate (provider-agnostic)';
+
   header.appendChild(pathSpan);
   header.appendChild(badge);
+  header.appendChild(tokenBadge);
 
   const isMd = isMarkdownFile(filePath);
   const isImage = isImageFile(filePath);
@@ -181,7 +237,22 @@ export function createFileReaderPane(sessionId: string, filePath: string, target
     element: el, filePath, resolvedPath: null, loaded: false, targetLine,
     viewMode: isMd ? 'rendered' : 'raw',
     kind: isImage ? 'image' : 'text',
+    unsupported: false,
   };
+
+  if (isHtmlFile(filePath)) {
+    const openBtn = document.createElement('button');
+    openBtn.className = 'search-toggle-btn file-reader-open-browser';
+    openBtn.textContent = 'Open in Browser';
+    openBtn.title = 'Open this file in the embedded browser';
+    openBtn.addEventListener('click', () => {
+      const project = appState.activeProject;
+      if (project) {
+        appState.addBrowserTabSession(project.id, pathToFileURL(resolveFilePath(instance)));
+      }
+    });
+    header.insertBefore(openBtn, badge);
+  }
 
   if (isMd) {
     const toggleGroup = document.createElement('div');
@@ -228,7 +299,7 @@ export function destroyFileReaderPane(sessionId: string): void {
   const instance = instances.get(sessionId);
   if (!instance) return;
   if (instance.resolvedPath) {
-    window.vibeyard.fs.unwatchFile(instance.resolvedPath);
+    window.vibeyard.fs.unwatchDir(dirname(instance.resolvedPath));
   }
   destroySearchBar(sessionId);
   destroyGoToLineBar(sessionId);
@@ -243,15 +314,16 @@ export function showFileReaderPane(sessionId: string, isSplit: boolean): void {
   if (isSplit) instance.element.classList.add('split');
   else instance.element.classList.remove('split');
 
-  // Start watching the file for external changes
+  // Watch the parent directory (not the file inode) so atomic save/replace —
+  // which swaps the inode and would kill a direct file watch — is still caught.
   if (!instance.resolvedPath) {
     const fullPath = resolveFilePath(instance);
     instance.resolvedPath = fullPath;
     ensureFileChangedListener();
-    window.vibeyard.fs.watchFile(fullPath);
+    window.vibeyard.fs.watchDir(dirname(fullPath));
   }
 
-  loadFile(instance);
+  loadFile(instance, sessionId);
   if (instance.loaded && instance.targetLine) {
     scrollToLine(instance);
   }
@@ -315,7 +387,7 @@ const RAW_TEXT_SELECTOR = '.file-reader-line-text';
 export function getFileReaderTextSelector(sessionId: string): string {
   const instance = instances.get(sessionId);
   if (!instance) return RAW_TEXT_SELECTOR;
-  if (instance.kind === 'image') return '.file-reader-no-search';
+  if (instance.kind === 'image' || instance.unsupported) return '.file-reader-no-search';
   return instance.viewMode === 'rendered' ? MARKDOWN_TEXT_SELECTOR : RAW_TEXT_SELECTOR;
 }
 
@@ -324,7 +396,7 @@ const goToLineBars = new Map<string, { bar: HTMLDivElement; input: HTMLInputElem
 export function showGoToLineBar(sessionId: string): void {
   const instance = instances.get(sessionId);
   if (!instance) return;
-  if (instance.kind === 'image') return;
+  if (instance.kind === 'image' || instance.unsupported) return;
   if (instance.viewMode === 'rendered') return;
 
   const existing = goToLineBars.get(sessionId);
