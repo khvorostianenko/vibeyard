@@ -8,10 +8,22 @@ import { restartAndResync } from './hook-status';
 import { initProviders, getAllProviders } from './providers/registry';
 import { initAutoUpdater } from './auto-updater';
 import { stopGitWatcher } from './git-watcher';
+import { stopAllFileWatchers } from './file-watcher';
 import { checkPythonAvailable } from './prerequisites';
 import { isMac } from './platform';
+import { isCloseConfirmed, setCloseConfirmed } from './close-state';
 
 let mainWindow: BrowserWindow | null = null;
+
+function requestConfirmClose(): void {
+  const win = BrowserWindow.getAllWindows()[0];
+  if (win && !win.isDestroyed()) {
+    win.webContents.send('app:confirmClose');
+  } else {
+    setCloseConfirmed(true);
+    app.quit();
+  }
+}
 
 function createWindow(): void {
   mainWindow = new BrowserWindow({
@@ -48,13 +60,19 @@ function createWindow(): void {
     }
   });
 
-  mainWindow.on('close', () => {
+  mainWindow.on('close', (event) => {
+    if (!isCloseConfirmed()) {
+      event.preventDefault();
+      requestConfirmClose();
+      return;
+    }
     flushState();
   });
 
   mainWindow.on('closed', () => {
     killAllPtys();
     resetHookWatcher();
+    stopAllFileWatchers();
     mainWindow = null;
   });
 }
@@ -123,7 +141,12 @@ app.whenReady().then(async () => {
   });
 });
 
-app.on('before-quit', () => {
+app.on('before-quit', (event) => {
+  if (!isCloseConfirmed()) {
+    event.preventDefault();
+    requestConfirmClose();
+    return;
+  }
   flushState();
   const win = BrowserWindow.getAllWindows()[0];
   if (win && !win.isDestroyed()) {
@@ -131,6 +154,7 @@ app.on('before-quit', () => {
   }
   killAllPtys();
   stopGitWatcher();
+  stopAllFileWatchers();
   // Cleanup all providers
   for (const provider of getAllProviders()) {
     provider.cleanup();

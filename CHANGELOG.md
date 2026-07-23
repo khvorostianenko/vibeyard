@@ -2,6 +2,302 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.4] - 2026-07-22
+
+### Features
+
+- Global active sessions sidebar panel across projects
+
+### Fixes
+
+- Notification click opening wrong session for same-named sessions
+- False session completion on subagent finish
+
+## [0.3.3] - 2026-06-29
+
+### Features
+
+- I18n support for English and Simplified Chinese (#151)
+- Per-task profile selection for kanban tasks
+
+## [0.3.2] - 2026-06-18
+
+### Features
+
+- Open-in-browser button for html files in file viewer
+
+### Fixes
+
+- Exclude empty sessions without transcripts from history
+- Microphone access for CLI tools in embedded terminal on macOS
+
+### Changes
+
+- Keep sidebar project order with active marked in place
+- New session dialog to show profile selector only for claude
+
+## [0.3.1] - 2026-06-01
+
+### Features
+
+- Claude profiles for multi-license isolated config dirs
+- Custom environment variables to new sessions
+- Right-click context menu for terminal panes (#116)
+
+### Fixes
+
+- Terminal stealing focus under CLAUDE_CODE_NO_FLICKER
+- Modal esc-to-close over focused terminals via centralized modal manager
+
+### Changes
+
+- Improve session status line with graphical context meter and stable token rail
+
+## [0.3.0] - 2026-05-30
+
+### Features
+
+- Top files by tokens widget: split button and .vibeyardignore filtering
+
+### Fixes
+
+- Avoid re-render when clicking already-selected preferences menu item
+
+### Changes
+
+- Restyle the app UI
+- Move session history remove action to right-click menu and tighten panel spacing
+- Increase sidebar text and icon sizes for readability
+- Split tab-bar into focused modules
+- Split preferences-modal into per-section modules
+
+## [0.2.39] - 2026-05-30
+
+### Features
+
+- Cold-load spinner to git changes panel
+
+### Fixes
+
+- Show git changes panel for a bare project with no session
+- Project-switch UI freeze from FSEvents watcher teardown storm
+
+### Changes
+
+- Refactor file watching to chokidar with incremental tree reconciliation
+
+## [0.2.38] - 2026-05-24
+
+### Features
+
+- Chrome cookies import for embedded browser
+
+### Fixes
+
+- Inotify watch leak from recursive git-watcher
+
+## [0.2.37] - 2026-05-13
+
+### Features
+
+- Top files by tokens overview widget
+- File properties dialog and token count in the file viewer
+
+### Fixes
+
+- Duplicate file tab when opening from the search bar
+
+### Changes
+
+- Remove-project dialog now mentions kanban tasks
+
+## [0.2.36] - 2026-05-11
+
+### Features
+
+- Hard refresh and Cmd+R/Shift+Cmd+R shortcuts in browser tab
+- Drag-to-reorder projects in sidebar
+- Remove button on favorite sessions widget
+
+### Fixes
+
+- Unknown widget types breaking the overview grid
+
+### Changes
+
+- Claude Code usage stats moved from top-bar modal to overview widget
+- MCP inspector tab no longer prompts for a name
+- Bookmark button moved next to remove button in sessions widget
+- Add-to-kanban prompt in PRs widget uses /review slash command
+
+## [0.2.35] - 2026-05-06
+
+### Features
+
+- Team, kanban, sessions, and favorite sessions widgets for the project overview
+- Review, fix, and add-to-kanban actions on GitHub PRs and issues widgets
+- Multiple GitHub widgets on the overview
+
+### Fixes
+
+- Overview widget jumping when resized while scrolled
+
+### Changes
+
+- GitHub widget titles now mention GitHub
+
+## [0.2.34] - 2026-05-06
+
+### Features
+
+- Customizable overview page with GitHub widgets
+- Drag-and-drop files into session prompt (from Finder or the file tree)
+
+### Fixes
+
+- CLAUDE.md recognition
+
+### Changes
+
+- Default layout for new projects to tabs (swarm off)
+
+## [0.2.33] - 2026-05-04
+
+### Fixes
+
+- Kanban tab rendering blank for projects created in-session
+- Team tab rendering to match project-tab and kanban
+- Hide unavailable resume providers
+
+## [0.2.32] - 2026-05-02
+
+### Features
+
+- Vertical icon strip and hover hints to collapsed sidebar
+- Provider icon to kanban task cards
+- Search and domain filter to team browse modal
+- Team-member install-as-agent flag
+- Team marketplace personas grouped by domain
+- Session metrics to kanban cards
+- Team tab with persona library and per-provider system prompts
+- Browser tab toolbar button
+- Readiness score tint to project Overview button in sidebar
+- Kanban board help dialog
+
+### Fixes
+
+- Browse team members modal shifting height on filter
+- Team tab being renamable like overview tab
+- Overview file tabs auto-closing for gemini and copilot agents
+- Team agents not appearing in Gemini and Copilot sidebars
+- Providers dropdown closing automatically on overview page
+- Kanban column rename being wiped by mid-edit re-renders
+- Diff viewer crash when clicking an untracked folder
+- Windows path shown as project name in tab titles
+- Missing orange dot for input status on kanban cards
+- Duplicate sessions and missing names in global search palette
+- Preferences modal width regressed after modal shell refactor
+- Worktree creation broken by WorktreeCreate observer hook
+
+### Changes
+
+- Discussions sidebar icon to material chat glyph
+- Split AppState into focused state modules
+- Yellow accent left border from quick wins panel
+- Sparkline from readiness category rows
+- Team chat session names with per-member counter
+- AI readiness with quick wins, score history, gauge, filter chips, and rationale tooltips
+- Kanban running card dots with tab status dots
+- Browse members modal with cards and persona detail view
+- Browser tab toolbar icon for sharper rendering
+- Large-file readiness threshold to 1000 lines
+
+## [0.2.31] - 2026-04-28
+
+### Features
+
+- Delete option to file tree right-click context menu
+- Open in browser context menu on file tree
+- Provider dropdown and plan mode toggle to kanban task form
+- Global session search palette (Cmd+Shift+F)
+- Rename option to project context menu
+- Kanban board for task management and session orchestration
+
+### Fixes
+
+- Modal confirm button missing after dismissing star prompt
+- Discard of untracked folders in git changes panel
+- Kanban sidebar button highlighting when its tab is open
+
+### Changes
+
+- Remove kanban button from top toolbar
+- Remove per-task folder field from kanban
+- Copy on select
+
+## [0.2.30] - 2026-04-26
+
+### Features
+
+- Send to existing session path in browser tab popovers
+- Line-number suffix in quick-open file search
+- Confirmation modal when quitting the app with working sessions
+
+### Fixes
+
+- Windows file viewer renders blank for absolute paths
+- Show "unable to preview" for binary files in the file viewer
+- Auto-close file viewer and diff tabs when the file is missing
+- Blacked-out terminal characters on WebGL context loss
+
+### Changes
+
+- Close-confirmation to include sessions awaiting input
+- Split AppState into nav-history, session-factory, and session-archive helpers
+- Centralize SessionType and drop legacy claude state
+- Extract readMcpServersFromJson into shared provider-config-utils
+
+## [0.2.29] - 2026-04-24
+
+### Features
+
+- Appearance section to preferences modal
+- Light theme support
+- Confirmation dialog when closing a working session
+- Project file tree and dedicated project tab layout
+- Dropdown caret next to new-session button for discoverable options
+- Disabled styling for empty-prompt send-to-ai buttons
+- Plan-mode toggle to ask-ai send surfaces
+- Ask AI prompt for text selections in file panes
+- Whole-app zoom preference with keyboard shortcuts
+
+### Fixes
+
+- Archive copilot sessions in history
+- Selectionchange listener leak when file viewers destroyed mid-reload
+- Sidebar resize sticking when mouse released outside window
+- Modal z-index rendering below tab context menus
+- Inspect popover clipping at pane edges
+- Statusline conflict alerts ignoring user consent
+
+### Changes
+
+- Delete-project confirmation to use themed modal
+- Discussions badge to sort and count by post creation date
+
+## [0.2.28] - 2026-04-19
+
+### Features
+
+- Preference to hide discussions button in sidebar
+- New-post badge to Discussions sidebar link via Atom feed polling
+
+### Fixes
+
+- Browser tab input lag by disabling background throttling on webview
+- Guard PTY operations against errors from exited processes
+- Sidebar discussions overlapping project list when sidebar content overflows
+
 ## [0.2.27] - 2026-04-12
 
 ### Features

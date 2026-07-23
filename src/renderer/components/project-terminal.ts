@@ -1,13 +1,13 @@
 import { Terminal } from '@xterm/xterm';
+import { getTerminalTheme } from '../terminal-theme.js';
 import { FitAddon } from '@xterm/addon-fit';
-import { WebglAddon } from '@xterm/addon-webgl';
 import { SearchAddon } from '@xterm/addon-search';
 import { appState } from '../state.js';
 import { fitAllVisible } from './terminal-pane.js';
 import { destroySearchBar, hideSearchBar } from './search-bar.js';
 import { shortcutManager, displayKeys } from '../shortcuts.js';
-import { getTerminalTheme } from '../theme-manager.js';
-import { attachClipboardCopyHandler } from './terminal-utils.js';
+import { resolveTheme } from '../theme-manager.js';
+import { attachClipboardCopyHandler, attachCopyOnSelect, loadWebglWithFallback } from './terminal-utils.js';
 import { esc } from '../dom-utils.js';
 
 interface ShellTerminalInstance {
@@ -69,7 +69,7 @@ function createShell(projectId: string): ShellTerminalInstance {
   element.style.position = 'relative';
 
   const terminal = new Terminal({
-    theme: getTerminalTheme(),
+    theme: getTerminalTheme(resolveTheme()),
     fontSize: 16,
     fontFamily: "'JetBrains Mono', 'Fira Code', 'SF Mono', Menlo, monospace",
     cursorBlink: true,
@@ -129,11 +129,8 @@ function activateShellInstance(instance: ShellTerminalInstance): void {
   if (!containerEl.contains(instance.element)) {
     containerEl.appendChild(instance.element);
     instance.terminal.open(instance.element);
-    try {
-      instance.terminal.loadAddon(new WebglAddon());
-    } catch {
-      // Software fallback
-    }
+    attachCopyOnSelect(instance.terminal);
+    loadWebglWithFallback(instance.terminal);
   }
   instance.element.style.display = '';
 
@@ -476,3 +473,12 @@ export function getAllShellInstances(): ShellTerminalInstance[] {
 }
 
 export { isShellSessionId };
+
+export function applyThemeToAllShells(theme: string): void {
+  const termTheme = getTerminalTheme(theme);
+  for (const list of shells.values()) {
+    for (const instance of list) {
+      instance.terminal.options.theme = termTheme;
+    }
+  }
+}

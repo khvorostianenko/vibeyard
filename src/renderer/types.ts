@@ -1,9 +1,9 @@
-export type { McpServer, Agent, Skill, Command, ProviderConfig, ClaudeConfig, GitWorktree, GitFileEntry, CostData, McpResult, ProviderId, CliProviderMeta, CliProviderCapabilities, StatsCache, ReadinessResult, ReadinessCategory, ReadinessCheck, ReadinessCheckStatus } from '../shared/types.js';
-import type { CostData, ProviderConfig, GitWorktree, McpResult, ProviderId, CliProviderMeta, StatsCache, ReadinessResult } from '../shared/types.js';
+export type { McpServer, Agent, Skill, Command, ProviderConfig, ClaudeConfig, GitWorktree, GitFileEntry, CostData, McpResult, ProviderId, CliProviderMeta, CliProviderCapabilities, StatsCache, ReadinessResult, ReadinessCategory, ReadinessCheck, ReadinessCheckStatus, ChromeProfile, ChromeImportOptions, ChromeImportProgress, ChromeImportResult } from '../shared/types.js';
+import type { CostData, ProviderConfig, GitWorktree, McpResult, ProviderId, CliProviderMeta, StatsCache, ReadinessResult, TopFilesResult, FsChange, ChromeProfile, ChromeImportOptions, ChromeImportProgress, ChromeImportResult } from '../shared/types.js';
 
 export interface VibeyardApi {
   pty: {
-    create(sessionId: string, cwd: string, cliSessionId: string | null, isResume: boolean, extraArgs?: string, providerId?: ProviderId, initialPrompt?: string): Promise<void>;
+    create(sessionId: string, cwd: string, cliSessionId: string | null, isResume: boolean, extraArgs?: string, providerId?: ProviderId, initialPrompt?: string, systemPrompt?: string, envVars?: string, configDir?: string): Promise<void>;
     createShell(sessionId: string, cwd: string): Promise<void>;
     write(sessionId: string, data: string): void;
     resize(sessionId: string, cols: number, rows: number): void;
@@ -13,6 +13,8 @@ export interface VibeyardApi {
     onExit(callback: (sessionId: string, exitCode: number, signal?: number) => void): () => void;
   };
   session: {
+    transcriptExists(providerId: ProviderId, cliSessionId: string | null, projectPath: string, configDir?: string): Promise<boolean>;
+    transcriptExistsSync(providerId: ProviderId, cliSessionId: string | null, projectPath: string, configDir?: string): boolean;
     onHookStatus(callback: (sessionId: string, status: 'working' | 'waiting' | 'completed' | 'input', hookName: string) => void): () => void;
     onCliSessionId(callback: (sessionId: string, cliSessionId: string) => void): () => void;
     /** @deprecated Use onCliSessionId */
@@ -25,15 +27,20 @@ export interface VibeyardApi {
     listDirs(dirPath: string, prefix?: string): Promise<string[]>;
     browseDirectory(): Promise<string | null>;
     listFiles(cwd: string, query: string): Promise<string[]>;
+    topFilesByTokens(cwd: string, limit: number): Promise<TopFilesResult>;
+    exists(filePath: string): Promise<boolean>;
     readFile(filePath: string): Promise<string>;
     readImage(filePath: string): Promise<{ dataUrl: string } | null>;
-    watchFile(filePath: string): void;
-    unwatchFile(filePath: string): void;
-    onFileChanged(callback: (filePath: string) => void): () => void;
+    watchDir(dirPath: string): void;
+    unwatchDir(dirPath: string): void;
+    onFsChange(callback: (changes: FsChange[]) => void): () => void;
   };
   store: {
     load(): Promise<unknown>;
     save(state: unknown): Promise<void>;
+  };
+  profiles: {
+    provision(profileId: string, customPath?: string): Promise<{ configDir: string; managed: boolean }>;
   };
   provider: {
     getConfig(providerId: ProviderId, projectPath: string): Promise<ProviderConfig>;
@@ -68,6 +75,13 @@ export interface VibeyardApi {
     openExternal(url: string): Promise<void>;
     onQuitting(callback: () => void): () => void;
   };
+  chromeImport: {
+    listProfiles(): Promise<ChromeProfile[]>;
+    run(options: ChromeImportOptions): Promise<ChromeImportResult>;
+    onProgress(callback: (progress: ChromeImportProgress) => void): () => void;
+    summary(): Promise<{ cookieCount: number; lastImportedAt: number }>;
+    clearCookies(): Promise<void>;
+  };
   mcp: {
     connect(id: string, url: string): Promise<McpResult>;
     disconnect(id: string): Promise<McpResult>;
@@ -84,6 +98,9 @@ export interface VibeyardApi {
   stats: {
     getCache(): Promise<StatsCache | null>;
   };
+  clipboard: {
+    write(text: string): Promise<void>;
+  };
   menu: {
     onNewProject(callback: () => void): () => void;
     onNewSession(callback: () => void): () => void;
@@ -92,7 +109,6 @@ export interface VibeyardApi {
     onPrevSession(callback: () => void): () => void;
     onGotoSession(callback: (index: number) => void): () => void;
     onToggleDebug(callback: () => void): () => void;
-    onUsageStats(callback: () => void): () => void;
     onToggleInspector(callback: () => void): () => void;
     onCloseSession(callback: () => void): () => void;
   };

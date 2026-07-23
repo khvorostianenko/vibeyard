@@ -3,26 +3,25 @@ import { initSidebar, promptNewProject } from './components/sidebar.js';
 import { initTabBar } from './components/tab-bar.js';
 import { initSplitLayout } from './components/split-layout.js';
 import { initKeybindings } from './keybindings.js';
-import { handlePtyData, destroyTerminal, updateCostDisplay, updateContextDisplay } from './components/terminal-pane.js';
+import { handlePtyData, destroyTerminal, updateCostDisplay, updateContextDisplay, refreshProfileLabels } from './components/terminal-pane.js';
 import { setIdle, setHookStatus, notifyInterrupt } from './session-activity.js';
 import { parseCost, setCostData, onChange as onCostChange } from './session-cost.js';
 import { parseTitle, clearSession as clearTitleSession } from './session-title.js';
 import { setContextData, onChange as onContextChange } from './session-context.js';
-import { initConfigSections } from './components/config-sections.js';
 import { initNotificationSound } from './notification-sound.js';
 import { initNotificationDesktop } from './notification-desktop.js';
 import { init as initSessionUnread } from './session-unread.js';
+import { init as initGithubUnread } from './github-unread.js';
 import { initProjectTerminal, handleShellPtyData, handleShellPtyExit, isShellSessionId } from './components/project-terminal.js';
 import { startPolling as startGitPolling } from './git-status.js';
 import { initDebugPanel, logDebugEvent } from './components/debug-panel.js';
 import { initGitPanel } from './components/git-panel.js';
+import { initActiveSessions } from './components/active-sessions-panel.js';
 import { disconnectInspector } from './components/mcp-inspector.js';
 import { initUpdateBanner } from './components/update-banner.js';
 import { initSessionHistory } from './components/session-history.js';
-import { showUsageModal } from './components/usage-modal.js';
 import { captureInitialContext } from './session-insights.js';
 import { initInsightAlert } from './components/insight-alert.js';
-import { initReadinessSection } from './components/readiness-section.js';
 import { initToolDetector } from './tools/missing-tool-detector.js';
 import { initToolAlert } from './components/tool-alert.js';
 import { initLargeFileDetector } from './tools/large-file-detector.js';
@@ -36,13 +35,38 @@ import { addEvents as addInspectorEvents } from './session-inspector-state.js';
 import type { InspectorEvent } from '../shared/types.js';
 import { getContext } from './session-context.js';
 import { initSessionInspector } from './components/session-inspector.js';
+import { initFilePrompt } from './components/file-prompt.js';
 import { loadProviderMetas } from './provider-availability.js';
 import { initTheme } from './theme-manager.js';
+import { setLocale as setI18nLocale, getLocale } from './i18n.js';
+import { resolveSystemLocale } from './system-locale.js';
+import { rerenderOpenPreferencesModal } from './components/preferences-modal.js';
+import type { Locale } from '../shared/types.js';
+
+function initI18n(): void {
+  const saved = appState.preferences.locale;
+  const initial: Locale = saved ?? resolveSystemLocale(navigator.language);
+  setI18nLocale(initial);
+  document.documentElement.lang = initial;
+  // Persist the resolved locale on first launch so subsequent runs reuse it.
+  if (!saved) {
+    appState.setPreference('locale', initial);
+  }
+}
+import { initBoard } from './components/board/board-view.js';
+import { initBoardSessionSync } from './board-session-sync.js';
+import { initTeamView } from './components/team/team-view.js';
+import { getZoomFactor } from './zoom.js';
+import { confirmAppClose } from './session-close.js';
 
 let isQuitting = false;
 window.vibeyard.app.onQuitting(() => {
   isQuitting = true;
   cleanupAllShares();
+});
+
+window.vibeyard.app.onConfirmClose(() => {
+  confirmAppClose(() => window.vibeyard.app.closeConfirmed());
 });
 
 async function main(): Promise<void> {
@@ -151,16 +175,17 @@ async function main(): Promise<void> {
   // Initialize components
   initTheme();
   initSessionUnread();
+  initGithubUnread();
   initSidebar();
   initTabBar();
   initSplitLayout();
   initKeybindings();
-  initConfigSections();
   initNotificationSound();
   initNotificationDesktop();
   initProjectTerminal();
   initDebugPanel();
   initGitPanel();
+  initActiveSessions();
   initSessionHistory();
   initUpdateBanner();
   initInsightAlert();
@@ -169,12 +194,13 @@ async function main(): Promise<void> {
   initLargeFileDetector();
   initLargeFileAlert();
   initSettingsGuard();
-  initReadinessSection();
   initShareManager();
   initSessionInspector();
+  initBoard();
+  initBoardSessionSync();
+  initTeamView();
+  initFilePrompt();
   startGitPolling();
-
-  document.getElementById('btn-usage-stats')!.addEventListener('click', () => showUsageModal());
 
   function isMcpSession(sessionId: string): boolean {
     for (const project of appState.projects) {
@@ -198,6 +224,32 @@ async function main(): Promise<void> {
 
   // Load persisted state
   await appState.load();
+
+  // Initialize the UI locale before anything else renders strings.
+  // Persisted choice wins; otherwise fall back to the OS language and persist
+  // it so future launches start in the same locale.
+  initI18n();
+
+  // Theme application (CSS + terminals) is handled by theme-manager's
+  // initTheme() above, which listens for preferences-changed/state-loaded.
+  // Handle locale change: re-translate the open preferences modal in
+  // place. Out-of-modal strings (sidebar buttons, tab titles) stay English
+  // until a follow-up PR translates them.
+  let lastLocale = getLocale();
+  appState.on('preferences-changed', () => {
+    const newLocale = appState.preferences.locale;
+    if (newLocale && newLocale !== lastLocale) {
+      lastLocale = newLocale;
+      setI18nLocale(newLocale);
+      document.documentElement.lang = newLocale;
+      rerenderOpenPreferencesModal();
+    }
+  });
+  // Adding/removing a profile changes whether the status-line profile label is shown.
+  appState.on('profiles-changed', () => refreshProfileLabels());
+
+  const savedZoom = getZoomFactor();
+  if (savedZoom !== 1.0) window.vibeyard.zoom.set(savedZoom);
 
   // Auto-open new project modal when no projects exist
   if (appState.projects.length === 0) {

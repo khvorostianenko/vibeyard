@@ -1,28 +1,30 @@
 import { appState } from './state.js';
-import { promptNewProject, toggleSidebar } from './components/sidebar.js';
+import { closeSessionWithConfirm } from './session-close.js';
+import { promptNewProject, toggleSidebar, toggleGitPanel } from './components/sidebar.js';
 import { quickNewSession } from './components/tab-bar.js';
 import { toggleProjectTerminal, getAllShellInstances } from './components/project-terminal.js';
 import { toggleDebugPanel } from './components/debug-panel.js';
-import { showHelpDialog } from './components/help-dialog.js';
+import { showPreferencesModal } from './components/preferences-modal.js';
 import { getFocusedSessionId, getAllInstances } from './components/terminal-pane.js';
 import { showSearchBar, TerminalSearchBackend, ShellTerminalSearchBackend } from './components/search-bar.js';
 import { getActiveShellSessionId } from './components/project-terminal.js';
 import { getAllRemoteInstances } from './components/remote-terminal-pane.js';
-import { toggleGitPanel } from './components/git-panel.js';
 import { showQuickOpen } from './components/quick-open.js';
+import { showSessionSearchPalette } from './components/session-search-palette.js';
 import { shortcutManager } from './shortcuts.js';
 import { getFileReaderInstance, getFileReaderTextSelector, showGoToLineBar } from './components/file-reader.js';
 import { getFileViewerInstance } from './components/file-viewer.js';
 import { DomSearchBackend } from './components/dom-search-backend.js';
 import { toggleInspector } from './components/session-inspector.js';
-import { showUsageModal } from './components/usage-modal.js';
 import { cycleTheme } from './theme-manager.js';
+import { zoomIn, zoomOut, zoomReset } from './zoom.js';
+import { getBrowserTabInstance } from './components/browser-tab/instance.js';
 
 export function initKeybindings(): void {
   const handleCloseSession = () => {
     const project = appState.activeProject;
     const session = appState.activeSession;
-    if (project && session) appState.removeSession(project.id, session.id);
+    if (project && session) closeSessionWithConfirm(project.id, session.id);
   };
 
   // Menu IPC listeners — handle clicks on Electron menu items.
@@ -35,7 +37,6 @@ export function initKeybindings(): void {
   window.vibeyard.menu.onPrevSession(() => appState.cycleSession(-1));
   window.vibeyard.menu.onGotoSession((index) => appState.gotoSession(index));
   window.vibeyard.menu.onToggleDebug(toggleDebugPanel);
-  window.vibeyard.menu.onUsageStats(showUsageModal);
   window.vibeyard.menu.onToggleInspector(toggleInspector);
   window.vibeyard.menu.onCloseSession(handleCloseSession);
 
@@ -57,6 +58,7 @@ export function initKeybindings(): void {
   shortcutManager.registerHandler('debug-panel', toggleDebugPanel);
   shortcutManager.registerHandler('git-panel', toggleGitPanel);
   shortcutManager.registerHandler('quick-open', showQuickOpen);
+  shortcutManager.registerHandler('session-search', showSessionSearchPalette);
   shortcutManager.registerHandler('find-in-terminal', () => {
     const shellPanel = document.getElementById('project-terminal-panel');
     if (shellPanel && !shellPanel.classList.contains('hidden') &&
@@ -94,9 +96,8 @@ export function initKeybindings(): void {
       showGoToLineBar(session.id);
     }
   });
-  shortcutManager.registerHandler('help', showHelpDialog);
+  shortcutManager.registerHandler('help', () => showPreferencesModal('help'));
   shortcutManager.registerHandler('close-session', handleCloseSession);
-  shortcutManager.registerHandler('usage-stats', showUsageModal);
   shortcutManager.registerHandler('toggle-inspector', toggleInspector);
   shortcutManager.registerHandler('toggle-theme', cycleTheme);
 
@@ -122,6 +123,19 @@ export function initKeybindings(): void {
     for (const inst of getAllInstances().values()) { inst.terminal.options.fontSize = DEFAULT_FONT_SIZE; inst.fitAddon.fit(); }
     for (const inst of getAllShellInstances()) { inst.terminal.options.fontSize = DEFAULT_FONT_SIZE; inst.fitAddon.fit(); }
     for (const inst of getAllRemoteInstances().values()) { inst.terminal.options.fontSize = DEFAULT_FONT_SIZE; inst.fitAddon.fit(); }
+  });
+  shortcutManager.registerHandler('zoom-in', zoomIn);
+  shortcutManager.registerHandler('zoom-out', zoomOut);
+  shortcutManager.registerHandler('zoom-reset', zoomReset);
+  shortcutManager.registerHandler('browser-reload', () => {
+    const session = appState.activeSession;
+    if (session?.type !== 'browser-tab') return;
+    getBrowserTabInstance(session.id)?.webview.reload();
+  });
+  shortcutManager.registerHandler('browser-hard-reload', () => {
+    const session = appState.activeSession;
+    if (session?.type !== 'browser-tab') return;
+    getBrowserTabInstance(session.id)?.webview.reloadIgnoringCache();
   });
 
   document.addEventListener('keydown', (e) => {
